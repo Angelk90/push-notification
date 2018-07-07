@@ -9,7 +9,6 @@ import android.os.Looper;
 import android.util.Log;
 
 import com.dieam.reactnativepushnotification.helpers.ApplicationBadgeHelper;
-import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -56,7 +55,10 @@ public class RNPushNotificationListenerService extends GcmListenerService {
         handler.post(new Runnable() {
             public void run() {
                 // Construct and load our normal React JS code bundle
-                ReactInstanceManager mReactInstanceManager = ((ReactApplication) getApplication()).getReactNativeHost().getReactInstanceManager();
+                ReactInstanceManager mReactInstanceManager = ReactInstanceManager.builder()
+                        .setApplication(getApplication()).build();
+
+                //((ReactApplication) getApplication()).getReactNativeHost().getReactInstanceManager();
                 ReactContext context = mReactInstanceManager.getCurrentReactContext();
                 // If it's constructed, send a notification
                 if (context != null) {

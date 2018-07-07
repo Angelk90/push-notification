@@ -20,12 +20,15 @@ import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.widget.RemoteViews;
 
+import com.dieam.reactnativepushnotification.R;
 import com.facebook.react.bridge.ReadableMap;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 
+import java.net.URL;
 import java.util.Arrays;
 
 import static com.dieam.reactnativepushnotification.modules.RNPushNotification.LOG_TAG;
@@ -159,7 +162,6 @@ public class RNPushNotificationHelper {
 
             NotificationCompat.Builder notification = new NotificationCompat.Builder(context)
                     .setContentTitle(title)
-                    .setTicker(bundle.getString("ticker"))
                     .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(bundle.getBoolean("autoCancel", true));
@@ -221,6 +223,7 @@ public class RNPushNotificationHelper {
             if (bigText == null) {
                 bigText = bundle.getString("message");
             }
+
 
             notification.setStyle(new NotificationCompat.BigTextStyle().bigText(bigText));
 
@@ -312,6 +315,142 @@ public class RNPushNotificationHelper {
                             PendingIntent.FLAG_UPDATE_CURRENT);
                     notification.addAction(icon, action, pendingActionIntent);
                 }
+            }
+
+            // Remove the notification from the shared preferences once it has been shown
+            // to avoid showing the notification again when the phone is rebooted. If the
+            // notification is not removed, then every time the phone is rebooted, we will
+            // try to reschedule all the notifications stored in shared preferences and since
+            // these notifications will be in the past time, they will be shown immediately
+            // to the user which we shouldn't do. So, remove the notification from the shared
+            // preferences once it has been shown to the user. If it is a repeating notification
+            // it will be scheduled again.
+            if (scheduledNotificationsPersistence.getString(notificationIdString, null) != null) {
+                SharedPreferences.Editor editor = scheduledNotificationsPersistence.edit();
+                editor.remove(notificationIdString);
+                commit(editor);
+            }
+
+            Notification info = notification.build();
+            info.defaults |= Notification.DEFAULT_LIGHTS;
+
+            if (bundle.containsKey("tag")) {
+                String tag = bundle.getString("tag");
+                notificationManager.notify(tag, notificationID, info);
+            } else {
+                notificationManager.notify(notificationID, info);
+            }
+
+            // Can't use setRepeating for recurring notifications because setRepeating
+            // is inexact by default starting API 19 and the notifications are not fired
+            // at the exact time. During testing, it was found that notifications could
+            // late by many minutes.
+            this.scheduleNextNotificationIfRepeating(bundle);
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "failed to send push notification", e);
+        }
+    }
+
+    public void sendToNotificationUi(Bundle bundle) {
+        try {
+            Class intentClass = getMainActivityClass();
+            if (intentClass == null) {
+                Log.e(LOG_TAG, "No activity class found for the notification");
+                return;
+            }
+
+            String notificationIdString = bundle.getString("id");
+            if (notificationIdString == null) {
+                Log.e(LOG_TAG, "No notification ID specified for the notification");
+                return;
+            }
+
+            Resources res = context.getResources();
+            String packageName = context.getPackageName();
+
+            RemoteViews remoteViews = new RemoteViews(context.getPackageName(), R.layout.custom_notification);
+            remoteViews.setTextViewText(R.id.home, bundle.getString("home"));
+            remoteViews.setTextViewText(R.id.away, bundle.getString("away"));
+            remoteViews.setTextViewText(R.id.result, bundle.getString("result"));
+
+            URL urlHome = new URL(bundle.getString("flagHome"));
+            Bitmap homeImg = BitmapFactory.decodeStream(urlHome.openConnection().getInputStream());
+            remoteViews.setImageViewBitmap(R.id.homeImg, homeImg);
+
+            URL urlAway = new URL(bundle.getString("flagAway"));
+            Bitmap awayImg = BitmapFactory.decodeStream(urlAway.openConnection().getInputStream());
+            remoteViews.setImageViewBitmap(R.id.awayImg, awayImg);
+
+            NotificationCompat.Builder notification = new NotificationCompat.Builder(context)
+                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCustomHeadsUpContentView(remoteViews)
+                    .setCustomContentView(remoteViews)
+                    .setCustomBigContentView(remoteViews)
+                    .setAutoCancel(bundle.getBoolean("autoCancel", true));
+
+            int smallIconResId;
+            String smallIcon = bundle.getString("smallIcon");
+
+            if (smallIcon != null) {
+                smallIconResId = res.getIdentifier(smallIcon, "mipmap", packageName);
+            } else {
+                smallIconResId = res.getIdentifier("ic_notification", "mipmap", packageName);
+            }
+
+            if (smallIconResId == 0) {
+                smallIconResId = res.getIdentifier("ic_launcher", "mipmap", packageName);
+
+                if (smallIconResId == 0) {
+                    smallIconResId = android.R.drawable.ic_dialog_info;
+                }
+            }
+
+            notification.setSmallIcon(smallIconResId);
+
+            Intent intent = new Intent(context, intentClass);
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            bundle.putBoolean("userInteraction", true);
+            intent.putExtra("notification", bundle);
+
+            if (!bundle.containsKey("playSound") || bundle.getBoolean("playSound")) {
+                Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                String soundName = bundle.getString("soundName");
+                if (soundName != null) {
+                    if (!"default".equalsIgnoreCase(soundName)) {
+
+                        // sound name can be full filename, or just the resource name.
+                        // So the strings 'my_sound.mp3' AND 'my_sound' are accepted
+                        // The reason is to make the iOS and android javascript interfaces compatible
+
+                        int resId;
+                        if (context.getResources().getIdentifier(soundName, "raw", context.getPackageName()) != 0) {
+                            resId = context.getResources().getIdentifier(soundName, "raw", context.getPackageName());
+                        } else {
+                            soundName = soundName.substring(0, soundName.lastIndexOf('.'));
+                            resId = context.getResources().getIdentifier(soundName, "raw", context.getPackageName());
+                        }
+
+                        soundUri = Uri.parse("android.resource://" + context.getPackageName() + "/" + resId);
+                    }
+                }
+                notification.setSound(soundUri);
+            }
+
+            int notificationID = Integer.parseInt(notificationIdString);
+
+            PendingIntent pendingIntent = PendingIntent.getActivity(context, notificationID, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT);
+
+            NotificationManager notificationManager = notificationManager();
+
+            notification.setContentIntent(pendingIntent);
+
+            if (!bundle.containsKey("vibrate") || bundle.getBoolean("vibrate")) {
+                long vibration = bundle.containsKey("vibration") ? (long) bundle.getDouble("vibration") : DEFAULT_VIBRATION;
+                if (vibration == 0)
+                    vibration = DEFAULT_VIBRATION;
+                notification.setVibrate(new long[]{0, vibration});
             }
 
             // Remove the notification from the shared preferences once it has been shown

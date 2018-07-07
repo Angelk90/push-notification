@@ -1,19 +1,19 @@
 {
-  "_from": "react-native-push-notification",
+  "_from": "react-native-push-notification@^3.0.2",
   "_id": "react-native-push-notification@3.0.2",
   "_inBundle": false,
   "_integrity": "sha512-enBzytbmBi4keOSPH6eofcXC2/z0GivJAbYpJmT6SdM964WbRAZV3mW6ouX/WhcqcI9dD8IEAu1edZuPzZkxCw==",
   "_location": "/react-native-push-notification",
   "_phantomChildren": {},
   "_requested": {
-    "type": "tag",
+    "type": "range",
     "registry": true,
-    "raw": "react-native-push-notification",
+    "raw": "react-native-push-notification@^3.0.2",
     "name": "react-native-push-notification",
     "escapedName": "react-native-push-notification",
-    "rawSpec": "",
+    "rawSpec": "^3.0.2",
     "saveSpec": null,
-    "fetchSpec": "latest"
+    "fetchSpec": "^3.0.2"
   },
   "_requiredBy": [
     "#USER",
@@ -21,8 +21,8 @@
   ],
   "_resolved": "https://registry.npmjs.org/react-native-push-notification/-/react-native-push-notification-3.0.2.tgz",
   "_shasum": "3fa7d654cfd915436597b0dd5ba8b0f898c4b0f5",
-  "_spec": "react-native-push-notification",
-  "_where": "C:\\Users\\Zappi\\Desktop\\mmm\\anchesenzadite",
+  "_spec": "react-native-push-notification@^3.0.2",
+  "_where": "C:\\Users\\Zappi\\Desktop\\Github\\Module\\ProvaMaterialModule",
   "author": {
     "name": "zo0r",
     "email": "http://zo0r.me"
